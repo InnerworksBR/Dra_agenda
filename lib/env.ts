@@ -1,5 +1,9 @@
 // Variáveis de ambiente validadas no carregamento (Zod).
-// Falhar cedo protege o processo inteiro.
+// Em runtime a falha é fatal. Em build time (next build) o módulo é
+// importado pelo Next para coleta de metadata e o Dokploy não injeta envs
+// via ARG por padrão — então toleramos ausências para não quebrar o build.
+// Os placeholders não devem ser usados: o container só sobe em runtime,
+// onde o Zod falha alto se faltar algo real.
 
 import { z } from 'zod';
 
@@ -53,12 +57,42 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
+const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+
 const parsed = schema.safeParse(process.env);
 
+const placeholders = {
+  APP_BASE_URL: 'http://localhost:3000',
+  N8N_API_SECRET: 'build-time-placeholder-min-16',
+  MAGIC_LINK_HASH_SECRET: 'build-time-placeholder-min-16',
+  SESSION_SECRET: 'build-time-placeholder-must-have-at-least-32-chars',
+  DATABASE_URL: 'postgresql://x:x@localhost:5432/x',
+  GOOGLE_CALENDAR_ID: 'build-time',
+  GOOGLE_CALENDAR_CREDENTIALS: '{"type":"service_account"}',
+  GOOGLE_CALENDAR_TIMEZONE: 'America/Sao_Paulo',
+  SCHEDULING_RULES_JSON: '',
+  MAGIC_LINK_TTL_MINUTES: 30,
+  DEFAULT_SERVICE_ID: 'consulta-inicial',
+  RATE_LIMIT_PUBLIC_PER_MINUTE: 20,
+  RATE_LIMIT_N8N_PER_MINUTE: 120,
+  WEBHOOK_NOTIFICATIONS_URL: '',
+  WEBHOOK_CONFIRMATION_URL: '',
+  N8N_REMINDER_WEBHOOK_URL: '',
+  EVOLUTION_INBOUND_SECRET: '',
+  NODE_ENV: 'production' as const,
+};
+
 if (!parsed.success) {
-  // Falha fatal com mensagem legível — chamada no boot do Next em cada cold start.
-  console.error('Variáveis de ambiente inválidas:', parsed.error.flatten().fieldErrors);
-  throw new Error('Configuração de ambiente inválida. Verifique .env e a seção 9.2 do PRD.');
+  if (isBuildPhase) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[env] build time: variáveis ausentes, usando placeholders. ' +
+        'Defina as envs no painel do Dokploy — serão exigidas em runtime.',
+    );
+  } else {
+    console.error('Variáveis de ambiente inválidas:', parsed.error.flatten().fieldErrors);
+    throw new Error('Configuração de ambiente inválida. Verifique .env e a seção 9.2 do PRD.');
+  }
 }
 
-export const env = parsed.data;
+export const env = parsed.success ? parsed.data : placeholders;

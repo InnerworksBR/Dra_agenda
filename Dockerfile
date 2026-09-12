@@ -17,7 +17,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-# generate é necessário para o client Prisma; build compila Next + Prisma.
+# Heap aumentado: o build do Next com App Router carrega muitas rotas e
+# coleta metadata; 2GB evita OOM em hosts com limite baixo.
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npx prisma generate && npm run build
 
 FROM node:${NODE_VERSION} AS run
