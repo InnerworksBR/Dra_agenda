@@ -1,0 +1,41 @@
+# Build artifacts
+node_modules
+.next
+dist
+out
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/dev.db*
+
+# Test
+coverage
+.vitest
+
+# Typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Claude Code (cache local, nunca vai pro repo)
+.claude/

@@ -1,0 +1,205 @@
+{
+  "name": "Dra. Priscila — Confirmação de Agendamento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dra-priscila-confirmacao",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-confirmacao",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "TROQUE_POR_UM_UUID_OU_DEIXE_O_N8N_GERAR"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validação mínima do payload do backend.\n// O backend envia: { appointment_id, patient_id, magic_link_id, patient_phone, patient_name, service_id, starts_at, ends_at, status }\nconst body = $input.item.json.body || $input.item.json;\n\nconst required = ['appointment_id', 'patient_phone', 'patient_name', 'service_id', 'starts_at', 'ends_at', 'status'];\nfor (const key of required) {\n  if (!body[key]) {\n    throw new Error(`Campo obrigatório ausente no webhook: ${key}`);\n  }\n}\n\n// Converte starts_at ISO para horário America/Sao_Paulo legível.\nconst dt = new Date(body.starts_at);\nconst fmt = new Intl.DateTimeFormat('pt-BR', {\n  timeZone: 'America/Sao_Paulo',\n  day: '2-digit',\n  month: '2-digit',\n  year: 'numeric',\n  hour: '2-digit',\n  minute: '2-digit',\n});\nconst parts = fmt.formatToParts(dt);\nconst get = (t) => parts.find(p => p.type === t)?.value || '';\nconst data = `${get('day')}/${get('month')}/${get('year')}`;\nconst hora = `${get('hour')}:${get('minute')}`;\n\nreturn {\n  json: {\n    appointment_id: body.appointment_id,\n    patient_phone: body.patient_phone,\n    patient_name: body.patient_name,\n    service_id: body.service_id,\n    starts_at: body.starts_at,\n    data,\n    hora,\n    status: body.status,\n  },\n};"
+      },
+      "id": "code-preparar",
+      "name": "Preparar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "status-confirmed",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "CONFIRMED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-confirmado",
+      "name": "Status == CONFIRMED?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.EVOLUTION_API_HOST }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.patient_phone }}\",\n  \"text\": \"✅ *Consulta confirmada com a Dra. Priscila*\\n\\nOlá, {{ $json.patient_name }}!\\n\\nSua consulta está agendada para:\\n📅 *{{ $json.data }}*\\n🕐 *{{ $json.hora }}*\\n\\nEm caso de imprevistos, responda esta mensagem.\\nAté lá! 💙\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "evolution-send",
+      "name": "Evolution API — enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.EVOLUTION_API_HOST }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.patient_phone }}\",\n  \"text\": \"⚠️ Houve um problema ao processar sua confirmação. Nossa equipe entrará em contato em instantes.\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "evolution-falha",
+      "name": "Evolution API — avisar falha",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"received\": true,\n  \"appointment_id\": \"{{ $json.appointment_id }}\",\n  \"sent\": true\n}"
+      },
+      "id": "respond-ok",
+      "name": "Responder 200 ao backend",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preparar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Status == CONFIRMED?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status == CONFIRMED?": {
+      "main": [
+        [
+          {
+            "node": "Evolution API — enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evolution API — avisar falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution API — enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 ao backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "dra-priscila"
+    },
+    {
+      "name": "confirmacao"
+    }
+  ],
+  "active": false,
+  "versionId": "1",
+  "id": "dra-priscila-confirmacao-workflow"
+}

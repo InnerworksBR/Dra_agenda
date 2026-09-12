@@ -1,0 +1,124 @@
+{
+  "name": "Dra. Priscila — Lembrete 20h (cron)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        },
+        "tz": "America/Sao_Paulo"
+      },
+      "id": "schedule-20h",
+      "name": "Cron 20h SP",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/v1/cron/confirm-reminders",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-call-cron",
+      "name": "Backend — buscar lote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transforma { batch_date, reminders: [...] } em um item por lembrete.\n// Cada item carrega data/hora já formatadas em pt-BR para a mensagem.\nconst input = $input.first().json;\nconst reminders = Array.isArray(input.reminders) ? input.reminders : [];\nconst fmt = new Intl.DateTimeFormat('pt-BR', {\n  timeZone: 'America/Sao_Paulo',\n  day: '2-digit',\n  month: '2-digit',\n  year: 'numeric',\n  hour: '2-digit',\n  minute: '2-digit',\n});\n\nreturn reminders.map((r) => {\n  const parts = fmt.formatToParts(new Date(r.starts_at));\n  const get = (t) => parts.find((p) => p.type === t)?.value || '';\n  const data = `${get('day')}/${get('month')}/${get('year')}`;\n  const hora = `${get('hour')}:${get('minute')}`;\n  const nome = r.patient_name || '';\n  return {\n    json: {\n      confirmation_id: r.confirmation_id,\n      appointment_id: r.appointment_id,\n      patient_phone: r.patient_phone,\n      patient_name: nome,\n      data,\n      hora,\n      batch_date: input.batch_date,\n    },\n  };\n});"
+      },
+      "id": "code-split",
+      "name": "Expandir lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.EVOLUTION_API_HOST }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.patient_phone }}\",\n  \"text\": \"Olá, {{ $json.patient_name }} 👋\\n\\nVocê confirma sua consulta com a Dra. Priscila amanhã, {{ $json.data }} às {{ $json.hora }}?\\n\\nResponda *1* para confirmar ou *2* para cancelar.\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-send-evolution",
+      "name": "Evolution API — enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Cron 20h SP": {
+      "main": [[{ "node": "Backend — buscar lote", "type": "main", "index": 0 }]]
+    },
+    "Backend — buscar lote": {
+      "main": [[{ "node": "Expandir lembretes", "type": "main", "index": 0 }]]
+    },
+    "Expandir lembretes": {
+      "main": [[{ "node": "Evolution API — enviar WhatsApp", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "active": false,
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "wf-dra-priscila-reminder-20h",
+  "pinData": {}
+}

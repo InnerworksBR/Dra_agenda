@@ -1,0 +1,63 @@
+# Compose para Dokploy / produção. Sobe Postgres + app Next.js no mesmo host.
+# Em dev local: docker compose up --build (com .env preenchido).
+#
+# Dokploy pode usar este arquivo via "Docker Compose" project type, ou você
+# pode usar o serviço da app isolado (com Postgres externo) via "Dockerfile".
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dra_priscila_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD é obrigatório}
+      POSTGRES_DB: ${POSTGRES_DB:-dra_priscila}
+    volumes:
+      - dra_priscila_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $${POSTGRES_USER:-dra} -d $${POSTGRES_DB:-dra_priscila}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sem porta exposta no host — Postgres só fala com a app via rede interna.
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dra-priscila-agendamento:latest
+    container_name: dra_priscila_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      # Banco aponta para o serviço "postgres" na rede interna do compose.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dra}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dra_priscila}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL é obrigatório}
+      N8N_API_SECRET: ${N8N_API_SECRET:?N8N_API_SECRET é obrigatório}
+      MAGIC_LINK_HASH_SECRET: ${MAGIC_LINK_HASH_SECRET:?MAGIC_LINK_HASH_SECRET é obrigatório}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET é obrigatório}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:?GOOGLE_CALENDAR_ID é obrigatório}
+      GOOGLE_CALENDAR_CREDENTIALS: ${GOOGLE_CALENDAR_CREDENTIALS:?GOOGLE_CALENDAR_CREDENTIALS é obrigatório}
+      GOOGLE_CALENDAR_TIMEZONE: ${GOOGLE_CALENDAR_TIMEZONE:-America/Sao_Paulo}
+      SCHEDULING_RULES_JSON: ${SCHEDULING_RULES_JSON:-}
+      MAGIC_LINK_TTL_MINUTES: ${MAGIC_LINK_TTL_MINUTES:-30}
+      DEFAULT_SERVICE_ID: ${DEFAULT_SERVICE_ID:-consulta-inicial}
+      RATE_LIMIT_PUBLIC_PER_MINUTE: ${RATE_LIMIT_PUBLIC_PER_MINUTE:-20}
+      RATE_LIMIT_N8N_PER_MINUTE: ${RATE_LIMIT_N8N_PER_MINUTE:-120}
+      WEBHOOK_NOTIFICATIONS_URL: ${WEBHOOK_NOTIFICATIONS_URL:-}
+      WEBHOOK_CONFIRMATION_URL: ${WEBHOOK_CONFIRMATION_URL:-}
+      N8N_REMINDER_WEBHOOK_URL: ${N8N_REMINDER_WEBHOOK_URL:-}
+      EVOLUTION_INBOUND_SECRET: ${EVOLUTION_INBOUND_SECRET:-}
+    ports:
+      - "3000:3000"
+
+volumes:
+  dra_priscila_pgdata:

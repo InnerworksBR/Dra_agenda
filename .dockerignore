@@ -1,0 +1,62 @@
+# Mantém node_modules, .next, secrets e arquivos locais fora da imagem.
+
+# Deps
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store
+
+# Build artifacts
+.next
+out
+dist
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment (não commitar segredos; .env.example pode entrar se quiser)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode
+.idea
+
+# Prisma local
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/dev.db*
+
+# Test
+coverage
+.vitest
+
+# Repositório
+.git
+.gitignore
+.gitattributes
+
+# Infra/Compose
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Docs operacionais (não vão pra produção, ficam no repo via git)
+docs/
+README.md
+.env.example
+
+# Scripts locais de seed/one-off que não rodam em prod
+scripts/seed-reminder-test.ts
+
+# CI
+.github

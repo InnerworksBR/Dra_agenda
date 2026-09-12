@@ -1,0 +1,190 @@
+{
+  "name": "Dra. Priscila — Cancelamento / Remarcação",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dra-priscila-cancelamento",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-cancelamento",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "TROQUE_POR_UM_UUID_OU_DEIXE_O_N8N_GERAR"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validação do payload do backend. Campos esperados:\n// { type, appointment_id, patient_id, patient_phone, patient_name, service_id, starts_at, ends_at }\nconst body = $input.item.json.body || $input.item.json;\n\nconst required = ['type', 'appointment_id', 'patient_phone', 'service_id', 'starts_at'];\nfor (const key of required) {\n  if (!body[key]) {\n    throw new Error(`Campo obrigatório ausente no webhook: ${key}`);\n  }\n}\n\nif (!['APPOINTMENT_CANCELLED', 'APPOINTMENT_RESCHEDULED'].includes(body.type)) {\n  throw new Error(`Tipo de evento não suportado: ${body.type}`);\n}\n\n// Converte starts_at ISO para data/hora em America/Sao_Paulo.\nconst dt = new Date(body.starts_at);\nconst fmt = new Intl.DateTimeFormat('pt-BR', {\n  timeZone: 'America/Sao_Paulo',\n  day: '2-digit',\n  month: '2-digit',\n  year: 'numeric',\n  hour: '2-digit',\n  minute: '2-digit',\n});\nconst parts = fmt.formatToParts(dt);\nconst get = (t) => parts.find(p => p.type === t)?.value || '';\nconst data = `${get('day')}/${get('month')}/${get('year')}`;\nconst hora = `${get('hour')}:${get('minute')}`;\n\nreturn {\n  json: {\n    type: body.type,\n    appointment_id: body.appointment_id,\n    patient_phone: body.patient_phone,\n    patient_name: body.patient_name ?? 'Paciente',\n    service_id: body.service_id,\n    starts_at: body.starts_at,\n    data,\n    hora,\n  },\n};"
+      },
+      "id": "code-preparar",
+      "name": "Preparar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "ramo-cancelado",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "APPOINTMENT_CANCELLED",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-cancelado",
+      "name": "Cancelado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.EVOLUTION_API_HOST }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.patient_phone }}\",\n  \"text\": \"❌ *Consulta cancelada*\\n\\nOlá, {{ $json.patient_name }}!\\n\\nSua consulta do dia *{{ $json.data }}* às *{{ $json.hora }}* foi cancelada com sucesso.\\n\\nSe quiser marcar um novo horário, é só responder esta mensagem. 💙\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "evolution-cancelado",
+      "name": "Evolution API — avisar cancelamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.EVOLUTION_API_HOST }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.EVOLUTION_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.patient_phone }}\",\n  \"text\": \"🔄 *Consulta remarcada*\\n\\nOlá, {{ $json.patient_name }}!\\n\\nSua consulta anterior do dia *{{ $json.data }}* às *{{ $json.hora }}* foi desmarcada para abrir espaço na agenda.\\n\\nPara escolher um novo horário, é só responder esta mensagem e eu te envio um novo link. 💙\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "evolution-remarcada",
+      "name": "Evolution API — avisar remarcação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 320]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"received\": true,\n  \"type\": \"{{ $json.type }}\",\n  \"appointment_id\": \"{{ $json.appointment_id }}\",\n  \"sent\": true\n}"
+      },
+      "id": "respond-ok",
+      "name": "Responder 200 ao backend",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Preparar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Cancelado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelado?": {
+      "main": [
+        [
+          {
+            "node": "Evolution API — avisar cancelamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evolution API — avisar remarcação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution API — avisar cancelamento": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 ao backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution API — avisar remarcação": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 ao backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "dra-priscila" },
+    { "name": "cancelamento" }
+  ],
+  "active": false,
+  "versionId": "1",
+  "id": "dra-priscila-cancelamento-workflow"
+}

@@ -1,0 +1,185 @@
+{
+  "name": "Dra. Priscila — Lembrete inbound (webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dra-priscila-reminder-inbound",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-evolution",
+      "name": "Webhook Evolution",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "TROQUE_POR_UM_UUID_OU_DEIXE_O_N8N_GERAR"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza payload da Evolution API. Aceita tanto payload completo\n// (messages.upsert[]) quanto payload simples { from, body, ... } quando\n// o n8n já tiver extraído.\nconst raw = $input.first().json;\nconst body = raw.body || raw;\n\n// Tenta extrair de messages.upsert (formato padrão da Evolution API).\nlet msg = body;\nif (Array.isArray(body?.messages) && body.messages.length > 0) {\n  msg = body.messages[0];\n} else if (body?.event === 'messages.upsert' && body?.data?.messages?.length > 0) {\n  msg = body.data.messages[0];\n}\n\nconst fromMe = Boolean(msg.key?.fromMe || msg.fromMe);\nconst messageType = msg.messageType || msg.type || 'conversation';\nconst text =\n  msg.message?.conversation ||\n  msg.message?.extendedTextMessage?.text ||\n  msg.body ||\n  msg.text ||\n  '';\nconst remoteJid = msg.key?.remoteJid || msg.from || msg.remoteJid || '';\nconst evolutionMessageId = msg.key?.id || msg.id || msg.messageId || '';\n\nif (fromMe) {\n  return [];\n}\n\n// Ignora mensagens não-texto (áudio, imagem, figurinha).\nif (!text || messageType === 'audioMessage' || messageType === 'imageMessage' ||\n    messageType === 'stickerMessage' || messageType === 'videoMessage' ||\n    messageType === 'documentMessage') {\n  return [{ json: { passthrough: true, from: remoteJid, messageType } }];\n}\n\nreturn [{\n  json: {\n    passthrough: false,\n    from: remoteJid,\n    body: text,\n    evolutionMessageId,\n    timestamp: msg.messageTimestamp || msg.timestamp || Date.now(),\n  },\n}];"
+      },
+      "id": "code-normalize",
+      "name": "Normalizar payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/v1/webhooks/evolution/inbound",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_INBOUND_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"{{ $json.from }}\",\n  \"body\": \"{{ $json.body }}\",\n  \"evolutionMessageId\": \"{{ $json.evolutionMessageId }}\",\n  \"timestamp\": {{ $json.timestamp }}\n}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-resolve-appointment",
+      "name": "Backend — resolver consulta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-reminder-response",
+              "leftValue": "={{ $json.handled }}",
+              "rightValue": "reminder_response",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-handled",
+      "name": "É resposta de lembrete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classifica o corpo da mensagem usando regex de dígito. 1 = CONFIRM,\n// 2 = CANCEL. Qualquer outra coisa vira UNKNOWN e cai no passthrough.\nconst m = String($json.body || '').match(/^\\s*([12])\\s*$/);\nif (!m) return [{ json: { ...$json, response_type: 'UNKNOWN' } }];\nconst digit = m[1];\nreturn [{\n  json: {\n    ...$json,\n    response_type: digit === '1' ? 'CONFIRM' : 'CANCEL',\n  },\n}];"
+      },
+      "id": "code-classify",
+      "name": "Classificar dígito",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/v1/appointments/{{ $json.appointment_id }}/respond-reminder",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"confirmation_id\": \"{{ $json.confirmation_id }}\",\n  \"response_type\": \"{{ $json.response_type }}\",\n  \"raw_response\": \"{{ $json.body }}\",\n  \"evolution_message_id\": \"{{ $json.evolutionMessageId }}\"\n}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-respond-reminder",
+      "name": "Backend — registrar resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true }",
+        "options": {}
+      },
+      "id": "respond-200",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Evolution": {
+      "main": [[{ "node": "Normalizar payload", "type": "main", "index": 0 }]]
+    },
+    "Normalizar payload": {
+      "main": [[{ "node": "Backend — resolver consulta", "type": "main", "index": 0 }]]
+    },
+    "Backend — resolver consulta": {
+      "main": [[{ "node": "É resposta de lembrete?", "type": "main", "index": 0 }]]
+    },
+    "É resposta de lembrete?": {
+      "main": [
+        [{ "node": "Classificar dígito", "type": "main", "index": 0 }],
+        [{ "node": "Responder 200", "type": "main", "index": 1 }]
+      ]
+    },
+    "Classificar dígito": {
+      "main": [[{ "node": "Backend — registrar resposta", "type": "main", "index": 0 }]]
+    },
+    "Backend — registrar resposta": {
+      "main": [[{ "node": "Responder 200", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "active": false,
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "wf-dra-priscila-reminder-inbound",
+  "pinData": {}
+}

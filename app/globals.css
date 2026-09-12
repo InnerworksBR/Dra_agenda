@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Apple Design System — base
+   Filosofia: superfícies claras/ escuras como separador visual, sem sombras
+   decorativas, único accent (#0066cc), tracking negativo em display.
+*/
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  min-height: 100%;
+  background-color: #f5f5f7; /* parchment */
+  color: #1d1d1f; /* ink */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss03", "kern";
+  /* body 17px / line-height 1.47 é o ritmo base */
+  font-size: 17px;
+  line-height: 1.47;
+  letter-spacing: -0.374px;
+}
+
+@layer components {
+  /* Pill primária — única sombra interativa é o scale(0.95) no active. */
+  .btn-pill-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-primary text-white text-body font-normal px-[22px] py-[11px] transition-transform focus:outline-none focus:ring-2 focus:ring-primary-focus focus:ring-offset-0 disabled:bg-chip-translucent disabled:text-white;
+    min-height: 44px;
+  }
+  .btn-pill-primary:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  /* Pill fantasma — usada para escolha de dia/horário. */
+  .btn-pill-ghost {
+    @apply inline-flex items-center justify-center rounded-full border border-primary text-primary bg-transparent text-body font-normal px-[22px] py-[11px] transition-transform focus:outline-none focus:ring-2 focus:ring-primary-focus;
+    min-height: 44px;
+  }
+  .btn-pill-ghost:active {
+    transform: scale(0.95);
+  }
+
+  /* Pill selecionada — borda 2px primary-focus. */
+  .btn-pill-selected {
+    @apply inline-flex items-center justify-center rounded-full bg-white text-primary border-2 border-primary-focus text-body-strong px-[22px] py-[11px];
+    min-height: 44px;
+  }
+
+  /* Dark utility button (rodapé escuro). */
+  .btn-dark-utility {
+    @apply inline-flex items-center justify-center rounded-sm bg-ink text-white text-button-utility px-[15px] py-2 transition-transform focus:outline-none focus:ring-2 focus:ring-primary-onDark;
+    min-height: 36px;
+  }
+  .btn-dark-utility:active {
+    transform: scale(0.95);
+  }
+
+  /* Inputs Apple — borda hairline, sem sombra. */
+  .input {
+    @apply w-full rounded-md border border-hairline bg-white px-4 py-3 text-body text-ink placeholder:text-ink-muted-48 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-20;
+    min-height: 44px;
+  }
+  .label {
+    @apply mb-1 block text-caption-strong text-ink;
+  }
+
+  /* Pill chip / tag — usada para flags pequenos ("Acesso negado", "Confirmado"). */
+  .pill {
+    @apply inline-flex items-center rounded-full bg-chip-translucent/60 px-3 py-1 text-fine-print font-normal text-ink;
+  }
+  .pill-on-dark {
+    @apply inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-fine-print font-normal text-white;
+  }
+
+  /* Tile full-bleed — sem border-radius, sem sombra. */
+  .tile {
+    @apply w-full;
+    border-radius: 0;
+  }
+
+  /* Sub-nav frosted — parchment 80% + blur. */
+  .sub-nav-frosted {
+    background-color: rgba(245, 245, 247, 0.8);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  /* Global nav mock — preto puro, 44px. */
+  .global-nav {
+    @apply h-11 bg-black w-full;
+  }
+}
+
+@layer utilities {
+  /* Tracking utilities para hierarquia Apple. */
+  .tracking-display {
+    letter-spacing: -0.374px;
+  }
+  .tracking-tagline {
+    letter-spacing: 0.231px;
+  }
+  .tracking-tight {
+    letter-spacing: -0.224px;
+  }
+
+  /* Numerais tabulares para datas e horários. */
+  .nums-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

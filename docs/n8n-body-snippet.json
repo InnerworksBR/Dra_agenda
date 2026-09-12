@@ -1,0 +1,7 @@
+{
+  "phone": "={{ $json.phone }}",
+  "patient_name": "={{ $json.name }}",
+  "service_id": "consulta-inicial",
+  "conversation_id": "={{ $execution.id }}",
+  "source": "whatsapp"
+}
