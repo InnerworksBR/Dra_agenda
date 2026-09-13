@@ -1,8 +1,12 @@
 # syntax=docker/dockerfile:1.7
-# Multi-stage: deps → build → run. Imagem final ~150MB.
+# Multi-stage: deps → build → run. Imagem final ~200MB.
 # Output standalone do Next.js reduz drasticamente o node_modules embarcado.
+#
+# Base: node:20-bookworm-slim (Debian). Alpine tem OpenSSL 1.1/3.x misturado
+# dependendo da tag e o Prisma engine exige libssl3; bookworm-slim traz
+# libssl3 pronto, sem gambiarras de apk add.
 
-ARG NODE_VERSION=20-alpine
+ARG NODE_VERSION=20-bookworm-slim
 
 FROM node:${NODE_VERSION} AS deps
 WORKDIR /app
@@ -29,9 +33,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Usuário não-root. alpine não tem adduser --no-create-home em algumas
-# versões — usar o caminho padrão.
-RUN addgroup -S app && adduser -S app -G app
+# Prisma engine exige libssl3; bookworm-slim não vem com openssl instalado.
+# Instalamos explicitamente e limpamos o cache do apt para manter a imagem enxuta.
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Usuário não-root. Debian-slim tem adduser com --disabled-password.
+RUN groupadd --system app && useradd --system --gid app app
 
 # Standalone: Next compila um servidor mínimo + suas deps externas em
 # .next/standalone. Copiamos só o que ele precisa pra rodar.
