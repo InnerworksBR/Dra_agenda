@@ -40,4 +40,21 @@ export type CalendarProvider = {
    * do calendário é tolerado (retorna sem throw).
    */
   deleteEvent(externalEventId: string): Promise<void>;
+
+  /**
+   * Lista eventos confirmados na janela [timeMin, timeMax]. Usado pelo cron
+   * de sync (/api/v1/cron/sync-calendar) pra puxar eventos do Google e
+   * espelhar no banco. Retorna apenas metadados (id, summary, start, end,
+   * description). Lança CalendarUnavailableError em falha de transporte.
+   */
+  listEvents(opts: { timeMin: Date; timeMax: Date }): Promise<
+    Array<{
+      externalEventId: string;
+      summary: string;
+      description: string | null;
+      startsAt: Date;
+      endsAt: Date;
+      status: string;
+    }>
+  >;
 };

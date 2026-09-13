@@ -61,3 +61,47 @@ export function normalizeEvolutionPhone(raw: string): string {
   const digits = raw.replace(/@.*$/, '').replace(/\D/g, '');
   return `+${digits}`;
 }
+
+import { normalizeToE164 } from '@/lib/phone/normalize';
+
+export { normalizeToE164 as normalizeBrPhone } from '@/lib/phone/normalize';
+
+/**
+ * Faz o parse do summary do Google Calendar no formato "Nome 13991743380"
+ * (a doutora foi treinada a escrever assim). Retorna { name, phone } ou
+ * null se não conseguir extrair.
+ *
+ * Aceita variantes:
+ *   - "Cristian 13991743380"
+ *   - "Maria Silva (13) 99174-3380"
+ *   - "João 55 13 991743380"
+ *   - "Avaliação — Pedro 13991743380"  (pega o que vem depois do último traço)
+ */
+export function parseCalendarSummary(summary: string | null | undefined): {
+  name: string;
+  phone: string;
+} | null {
+  if (!summary) return null;
+  // Estratégia: procurar separadores NO INÍCIO (serviço —). O resto do
+  // summary é "Nome ... Telefone". O telefone é a sequência que contém
+  // a maior quantidade de dígitos na string (10+).
+  let rest = summary;
+  const headSep = summary.search(/[—|]/);
+  if (headSep >= 0 && summary.slice(0, headSep).trim().length > 0) {
+    rest = summary.slice(headSep + 1);
+  }
+  // Encontra a posição onde termina a parte textual (nome) e começa o telefone.
+  // O telefone é tudo a partir do último bloco com 8+ dígitos consecutivos.
+  const digitBlock = rest.match(/(\d[\d\s().-]{6,}\d)/);
+  if (!digitBlock) return null;
+  const phoneRaw = digitBlock[0];
+  let phone: string;
+  try {
+    phone = normalizeToE164(phoneRaw);
+  } catch {
+    return null;
+  }
+  const before = rest.slice(0, rest.indexOf(phoneRaw)).trim();
+  const name = before.replace(/[\s—\-|/()]+$/, '').trim() || 'Paciente';
+  return { name, phone };
+}

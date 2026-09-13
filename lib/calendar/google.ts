@@ -146,6 +146,51 @@ export class GoogleCalendarProvider implements CalendarProvider {
       throw new CalendarUnavailableError('Falha ao remover evento no Google Calendar');
     }
   }
+
+  async listEvents({ timeMin, timeMax }: { timeMin: Date; timeMax: Date }): Promise<Array<{
+    externalEventId: string;
+    summary: string;
+    description: string | null;
+    startsAt: Date;
+    endsAt: Date;
+    status: string;
+  }>> {
+    const calendar = getCalendar();
+    const out: Array<{
+      externalEventId: string;
+      summary: string;
+      description: string | null;
+      startsAt: Date;
+      endsAt: Date;
+      status: string;
+    }> = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await calendar.events.list({
+        calendarId: env.GOOGLE_CALENDAR_ID,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        showDeleted: false,
+        pageToken,
+      });
+      for (const item of res.data.items ?? []) {
+        if (!item.id || !item.start?.dateTime || !item.end?.dateTime) continue;
+        // Ignora eventos cancelados — o sync trata apenas CONFIRMED.
+        if (item.status && item.status !== 'confirmed') continue;
+        out.push({
+          externalEventId: item.id,
+          summary: item.summary ?? '',
+          description: item.description ?? null,
+          startsAt: new Date(item.start.dateTime),
+          endsAt: new Date(item.end.dateTime),
+          status: item.status ?? 'confirmed',
+        });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return out;
+  }
 }
 
 const devReserved = new Set<string>();
@@ -184,6 +229,19 @@ export class DevFallbackCalendarProvider implements CalendarProvider {
       }
     }
     // Se não estava no Set (cenários de teste), não faz nada.
+  }
+
+  async listEvents(): Promise<Array<{
+    externalEventId: string;
+    summary: string;
+    description: string | null;
+    startsAt: Date;
+    endsAt: Date;
+    status: string;
+  }>> {
+    // Em dev sem credenciais Google não temos fonte de verdade de eventos.
+    // O sync retorna vazio, e o batch de lembretes não cria nada novo.
+    return [];
   }
 }
 

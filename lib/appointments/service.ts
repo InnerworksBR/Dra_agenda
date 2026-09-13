@@ -69,7 +69,7 @@ export async function confirmAppointment(input: ConfirmInput) {
     const res = await provider.createEvent({
       startsAt: resolved.startsAt,
       endsAt: resolved.endsAt,
-      summary: `${service.name} — ${patient.name ?? 'Paciente'}`,
+      summary: `${patient.name ?? 'Paciente'} ${patient.phoneE164.replace(/^\+55/, '')}`,
       description: `Agendamento via portal. Paciente: ${patient.name ?? '(sem nome)'}. Telefone: ${patient.phoneE164}.`,
     });
     externalEventId = res.externalEventId;

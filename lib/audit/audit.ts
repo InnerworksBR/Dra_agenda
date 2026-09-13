@@ -24,6 +24,10 @@ export type AuditEventType =
   | 'reminder.responded'
   | 'reminder.orphan_response'
   | 'reminder.cancel_outside_window'
+  | 'sync.event_unparsed'
+  | 'sync.conflict_skipped'
+  | 'sync.orphan_cancelled'
+  | 'sync.batch_completed'
   | 'n8n.unauthorized'
   | 'n8n.rate_limited';
 

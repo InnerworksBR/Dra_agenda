@@ -81,6 +81,11 @@ model Appointment {
   endsAt                    DateTime @map("ends_at")
   status                    AppointmentStatus @default(CONFIRMED)
   externalCalendarEventId   String?  @map("external_calendar_event_id")
+  // Origem da consulta. NULL = criado pela API/portal. 'google_import' =
+  // sincronizado do Google Calendar pelo cron /api/v1/cron/sync-calendar.
+  // Usado pra diferenciar quem pode cancelar e pra detectar deleções no
+  // Google (sync marca CANCELLED se o evento some da listagem).
+  source                    String?  @map("source")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 
