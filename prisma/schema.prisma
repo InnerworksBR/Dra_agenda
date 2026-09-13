@@ -4,6 +4,11 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = []
+  // O Dokploy VPS pode ser x86_64 ou arm64, e o ambiente de build
+  // (este Dockerfile em Debian) também pode variar. Empacotamos todos os
+  // targets oficiais do Prisma 5.22 para o client carregar o binário certo
+  // em runtime sem precisar regenerar.
+  binaryTargets  = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "rhel-openssl-3.0.x", "rhel-openssl-1.1.x", "linux-musl-openssl-3.0.x", "linux-arm64-openssl-3.0.x", "linux-arm64-openssl-1.1.x"]
 }
 
 datasource db {
