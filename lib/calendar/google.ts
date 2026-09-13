@@ -64,6 +64,14 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       const item = res.data.calendars?.[env.GOOGLE_CALENDAR_ID];
       const errors = item?.errors;
+      // Diagnóstico temporário: log do que o Google respondeu, para
+      // distinguir "calendar vazio" (busy: []) de "sem acesso" (errors).
+      console.log('[freebusy]', {
+        calendarId: env.GOOGLE_CALENDAR_ID,
+        busyCount: item?.busy?.length ?? 0,
+        errors: errors?.map((e) => e.reason) ?? [],
+        sampleBusy: item?.busy?.slice(0, 3) ?? [],
+      });
       if (errors && errors.length > 0) {
         throw new CalendarUnavailableError(`Google retornou erro: ${errors.map((e) => e.reason).join(', ')}`);
       }
