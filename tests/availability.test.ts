@@ -41,6 +41,28 @@ describe('computeAvailability', () => {
     const result = await computeAvailability({ now, busy });
     expect(result.windowDays.length).toBe(0);
   });
+
+  it('remove slots específicos ocupados por eventos do Google Calendar', async () => {
+    // 15/09/2026 é terça. now = 07:00 SP = 10:00 UTC.
+    const now = new Date('2026-09-15T10:00:00Z');
+    // 10:00–11:15 SP = 13:00–14:15 UTC
+    const busy = [
+      { start: new Date('2026-09-15T13:00:00Z'), end: new Date('2026-09-15T14:15:00Z') },
+    ];
+    const result = await computeAvailability({ now, busy });
+    const tue = result.windowDays.find((d) => d.date === '2026-09-15');
+    expect(tue).toBeDefined();
+    // Slots ocupados entre 10:00 e 11:00 SP NÃO devem aparecer
+    expect(tue!.slots).not.toContain('10:00');
+    expect(tue!.slots).not.toContain('10:15');
+    expect(tue!.slots).not.toContain('10:30');
+    expect(tue!.slots).not.toContain('10:45');
+    expect(tue!.slots).not.toContain('11:00');
+    // Slots antes do evento E depois devem aparecer
+    expect(tue!.slots).toContain('08:00');
+    expect(tue!.slots).toContain('09:45');
+    expect(tue!.slots).toContain('11:15');
+  });
 });
 
 describe('resolveSlotId', () => {

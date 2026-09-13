@@ -97,10 +97,10 @@ export async function computeAvailability(opts: {
       const theoretical = slotsForRange(range.start, range.end, rules.slotMinutes);
       const busy = busyByDay.get(dayKey) ?? [];
       for (const hhmm of theoretical) {
-        const [h, m] = hhmm.split(':').map(Number);
-        const slotStartZoned = new Date(cursor);
-        slotStartZoned.setHours(h, m, 0, 0);
-        const slotStart = fromZonedTime(slotStartZoned, tz);
+        // Constrói o instante absoluto do slot a partir do dia+horário no
+        // timezone da clínica. `fromZonedTime` interpreta a string como
+        // horário local em `tz` e devolve a data em UTC correspondente.
+        const slotStart = fromZonedTime(`${dayKey}T${hhmm}:00`, tz);
         const slotEnd = addMinutes(slotStart, rules.slotMinutes);
         // Não oferecer horários no passado.
         if (!isAfter(slotStart, now)) continue;
