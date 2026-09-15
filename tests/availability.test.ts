@@ -12,96 +12,193 @@ process.env.APP_BASE_URL ||= 'http://localhost:3000';
 const { computeAvailability, resolveSlotId } = await import('@/lib/scheduler/availability');
 const tz = 'America/Sao_Paulo';
 
+// Helper: cria um evento no fuso America/Sao_Paulo a partir de strings HH:mm.
+function evOn(dayKey: string, startHHmm: string, endHHmm: string) {
+  return {
+    start: new Date(`${dayKey}T${startHHmm}:00-03:00`),
+    end: new Date(`${dayKey}T${endHHmm}:00-03:00`),
+  };
+}
+
 describe('computeAvailability', () => {
-  it('retorna até 7 dias com pelo menos um slot livre, pulando dias ocupados', async () => {
-    const now = new Date('2026-01-05T08:00:00Z'); // segunda
-    // Dia 0 totalmente ocupado
-    const d0Start = new Date('2026-01-05T08:00:00Z');
-    const d0End = new Date('2026-01-05T20:00:00Z');
+  it('retorna até 7 dias com pelo menos um slot livre, pulando dias sem eventos', async () => {
+    // now = segunda 2026-01-05 08:00 SP = 11:00 UTC (janeiro, sem DST).
+    const now = new Date('2026-01-05T11:00:00Z');
     const result = await computeAvailability({
       now,
-      busy: [{ start: d0Start, end: d0End }],
+      events: [
+        // Evento só na quarta 07 — pula segunda e terça.
+        evOn('2026-01-07', '10:00', '11:00'),
+      ],
     });
-
     expect(result.windowDays.length).toBeGreaterThan(0);
     expect(result.windowDays.length).toBeLessThanOrEqual(7);
-    // Nenhum dia retornado deve ter 0 slots.
     for (const d of result.windowDays) {
       expect(d.slots.length).toBeGreaterThan(0);
     }
   });
 
   it('respeita o limite de maxSearchDays', async () => {
-    const now = new Date('2026-01-05T08:00:00Z');
-    // 21 dias seguidos totalmente ocupados
-    const busy = Array.from({ length: 21 }).map((_, i) => ({
-      start: addDays(now, i),
-      end: addDays(now, i + 1),
-    }));
-    const result = await computeAvailability({ now, busy });
-    expect(result.windowDays.length).toBe(0);
+    const now = new Date('2026-01-05T11:00:00Z');
+    // 21 dias seguidos, cada um com 1 evento curto em horário diferente
+    // pra garantir que o dia conta como "tem evento" e cair no limite de busca.
+    const events = Array.from({ length: 21 }).map((_, i) =>
+      evOn(
+        new Date(addDays(new Date('2026-01-06T12:00:00-03:00'), i)).toISOString().slice(0, 10),
+        '12:00',
+        '12:15',
+      ),
+    );
+    const result = await computeAvailability({ now, events });
+    // Janela D+2 = quarta 07. De quarta até 21 dias depois.
+    expect(result.windowDays.length).toBeLessThanOrEqual(7);
   });
 
-  it('remove slots específicos ocupados por eventos do Google Calendar', async () => {
-    // 15/09/2026 é terça. now = 07:00 SP = 10:00 UTC.
-    // Com a regra D+2 úteis, terça não aparece — primeiro dia é quinta 17/09.
-    const now = new Date('2026-09-15T10:00:00Z');
-    // Bloqueia 10:00–11:15 SP na quinta (17/09) = 13:00–14:15 UTC
-    const busy = [
-      { start: new Date('2026-09-17T13:00:00Z'), end: new Date('2026-09-17T14:15:00Z') },
-    ];
-    const result = await computeAvailability({ now, busy });
-    const thu = result.windowDays.find((d) => d.date === '2026-09-17');
-    expect(thu).toBeDefined();
-    // Slots ocupados entre 10:00 e 11:00 SP NÃO devem aparecer
-    expect(thu!.slots).not.toContain('10:00');
-    expect(thu!.slots).not.toContain('10:15');
-    expect(thu!.slots).not.toContain('10:30');
-    expect(thu!.slots).not.toContain('10:45');
-    expect(thu!.slots).not.toContain('11:00');
-    // Slots antes do evento E depois devem aparecer
-    expect(thu!.slots).toContain('08:00');
-    expect(thu!.slots).toContain('09:45');
-    expect(thu!.slots).toContain('11:15');
+  it('gera slots nos buracos entre eventos do dia', async () => {
+    // now = quarta 2026-01-07 08:00 SP. D+2 = sexta 09.
+    // Janela absoluta: 06:00–23:00. Evento 10:00–11:00 na sexta 09.
+    const now = new Date('2026-01-07T11:00:00Z'); // 08:00 SP da qui 07
+    const result = await computeAvailability({
+      now,
+      events: [evOn('2026-01-09', '10:00', '11:00')],
+    });
+    const fri = result.windowDays.find((d) => d.date === '2026-01-09');
+    expect(fri).toBeDefined();
+    // Antes do evento: 06:00..09:45.
+    expect(fri!.slots).toContain('06:00');
+    expect(fri!.slots).toContain('09:45');
+    expect(fri!.slots).not.toContain('10:00');
+    expect(fri!.slots).not.toContain('10:45');
+    // Depois do evento: 11:00 até 22:45.
+    expect(fri!.slots).toContain('11:00');
+    expect(fri!.slots).toContain('22:45');
   });
 
-  describe('janela ≥ D+2 dias úteis', () => {
-    // As regras padrão (mon–sex 08–12 e 14–18; sex só 08–12) vêm de
-    // lib/scheduler/rules.ts (DEFAULT_RULES) e são injetadas via
-    // getSchedulingRules(). Os testes assumem essas defaults.
+  it('não gera slot que começa colado em evento (buraco de 15 min só permite 1 slot)', async () => {
+    // Eventos justapostos 10:00–11:00 e 11:00–12:00 na sexta 09. Com D+2 a
+    // partir de quarta 07, primeiro dia mostrado é sexta 09.
+    const now = new Date('2026-01-07T11:00:00Z');
+    const result = await computeAvailability({
+      now,
+      events: [
+        evOn('2026-01-09', '10:00', '11:00'),
+        evOn('2026-01-09', '11:00', '12:00'),
+      ],
+    });
+    const fri = result.windowDays.find((d) => d.date === '2026-01-09');
+    expect(fri).toBeDefined();
+    // Buraco entre eventos tem 0 min, então 11:00 não pode aparecer.
+    expect(fri!.slots).not.toContain('10:45');
+    expect(fri!.slots).not.toContain('11:00');
+    // Slot 12:00 aparece logo depois do segundo evento.
+    expect(fri!.slots).toContain('12:00');
+  });
 
-    it('segunda-feira 10:00 SP → primeiro dia é quarta', async () => {
-      // 2026-01-05 é segunda. 10:00 SP = 13:00 UTC (BRT, sem DST em janeiro).
-      const now = new Date('2026-01-05T13:00:00Z');
-      const result = await computeAvailability({ now, busy: [] });
+  it('respeita transparência do evento (Mostrar como: Livre)', async () => {
+    const now = new Date('2026-01-07T11:00:00Z');
+    const result = await computeAvailability({
+      now,
+      events: [
+        { ...evOn('2026-01-09', '10:00', '11:00'), transparent: true },
+      ],
+    });
+    const fri = result.windowDays.find((d) => d.date === '2026-01-09');
+    expect(fri).toBeDefined();
+    // Como o evento é transparente, é ignorado — slots 10:00–10:45 aparecem.
+    expect(fri!.slots).toContain('10:00');
+    expect(fri!.slots).toContain('10:45');
+  });
+
+  it('descarta slots no passado', async () => {
+    // now = sexta 2026-01-09 11:30 SP. Sem eventos futuros nesse dia,
+    // então sexta (já passada parcialmente) some da janela D+2.
+    const now = new Date('2026-01-09T14:30:00Z'); // 11:30 SP
+    const result = await computeAvailability({
+      now,
+      events: [evOn('2026-01-09', '14:00', '15:00')], // já em andamento
+    });
+    // O dia 09 não deve aparecer (passou do D+2 e tem só evento atual).
+    const fri = result.windowDays.find((d) => d.date === '2026-01-09');
+    expect(fri).toBeUndefined();
+  });
+
+  it('faz merge de eventos sobrepostos', async () => {
+    const now = new Date('2026-01-07T11:00:00Z');
+    const result = await computeAvailability({
+      now,
+      events: [
+        evOn('2026-01-09', '10:00', '11:30'),
+        evOn('2026-01-09', '11:00', '12:00'),
+      ],
+    });
+    const fri = result.windowDays.find((d) => d.date === '2026-01-09');
+    expect(fri).toBeDefined();
+    // Junção: 10:00–12:00 ocupado. Slots dentro não podem aparecer.
+    expect(fri!.slots).not.toContain('10:45');
+    expect(fri!.slots).not.toContain('11:00');
+    expect(fri!.slots).not.toContain('11:45');
+    // Antes (06:00–09:45) e depois (12:00+) sim.
+    expect(fri!.slots).toContain('09:45');
+    expect(fri!.slots).toContain('12:00');
+  });
+
+  describe('janela ≥ D+2 dias corridos', () => {
+    it('segunda 08:00 SP → primeiro dia é quarta (D+2 corridos)', async () => {
+      // 2026-01-05 segunda. Evento só na quarta 07.
+      const now = new Date('2026-01-05T11:00:00Z');
+      const result = await computeAvailability({
+        now,
+        events: [evOn('2026-01-07', '10:00', '11:00')],
+      });
       expect(result.windowDays.length).toBeGreaterThan(0);
-      // D+2 úteis após segunda = quarta (pula terça).
-      expect(result.windowDays[0]!.date).toBe('2026-01-07'); // quarta
+      expect(result.windowDays[0]!.date).toBe('2026-01-07');
     });
 
-    it('quarta-feira 20:00 SP → primeiro dia é sexta', async () => {
-      // 2026-01-07 é quarta. 20:00 SP = 23:00 UTC. Quarta já passou; pula quinta → sexta.
+    it('quarta 20:00 SP → primeiro dia é sexta (D+2 corridos)', async () => {
+      // 2026-01-07 quarta. Eventos só na sexta 09.
       const now = new Date('2026-01-07T23:00:00Z');
-      const result = await computeAvailability({ now, busy: [] });
+      const result = await computeAvailability({
+        now,
+        events: [evOn('2026-01-09', '10:00', '11:00')],
+      });
       expect(result.windowDays.length).toBeGreaterThan(0);
-      expect(result.windowDays[0]!.date).toBe('2026-01-09'); // sexta
+      expect(result.windowDays[0]!.date).toBe('2026-01-09');
     });
 
-    it('quinta-feira 10:00 SP → primeiro dia é segunda', async () => {
-      // 2026-01-08 é quinta. D+2 úteis = segunda (pula sexta + fim de semana).
-      const now = new Date('2026-01-08T13:00:00Z');
-      const result = await computeAvailability({ now, busy: [] });
+    it('sexta 08:00 SP → primeiro dia é domingo (D+2 corridos)', async () => {
+      // 2026-01-09 sexta. D+2 = domingo 11.
+      const now = new Date('2026-01-09T11:00:00Z');
+      const result = await computeAvailability({
+        now,
+        events: [evOn('2026-01-11', '10:00', '11:00')],
+      });
       expect(result.windowDays.length).toBeGreaterThan(0);
-      expect(result.windowDays[0]!.date).toBe('2026-01-12'); // segunda
+      expect(result.windowDays[0]!.date).toBe('2026-01-11');
     });
 
-    it('sábado 08:00 SP → primeiro dia é terça', async () => {
-      // 2026-01-10 é sábado. D+2 úteis = terça (pula segunda → terça).
+    it('sábado 08:00 SP → primeiro dia é segunda (D+2 corridos)', async () => {
+      // 2026-01-10 sábado. D+2 = segunda 12.
       const now = new Date('2026-01-10T11:00:00Z');
-      const result = await computeAvailability({ now, busy: [] });
+      const result = await computeAvailability({
+        now,
+        events: [evOn('2026-01-12', '10:00', '11:00')],
+      });
       expect(result.windowDays.length).toBeGreaterThan(0);
-      expect(result.windowDays[0]!.date).toBe('2026-01-13'); // terça
+      expect(result.windowDays[0]!.date).toBe('2026-01-12');
     });
+  });
+
+  it('respeita a janela absoluta (não oferece antes do dayWindow.start nem depois do end)', async () => {
+    // now = quarta 07/01 08:00 SP. D+2 = sexta 09. dayWindow 06:00–23:00.
+    const now = new Date('2026-01-07T11:00:00Z');
+    const result = await computeAvailability({
+      now,
+      events: [evOn('2026-01-09', '10:00', '11:00')],
+    });
+    const fri = result.windowDays.find((d) => d.date === '2026-01-09');
+    expect(fri).toBeDefined();
+    expect(fri!.slots[0]).toBe('06:00');
+    expect(fri!.slots.at(-1)).toBe('22:45');
   });
 });
 
