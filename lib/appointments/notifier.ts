@@ -8,6 +8,7 @@
 import { env } from '@/lib/env';
 import { prisma } from '@/lib/db/prisma';
 import { recordAudit } from '@/lib/audit/audit';
+import { formatPtBrDate, formatPtBrTime } from '@/lib/time/sao-paulo';
 
 export type AppointmentEventType =
   | 'APPOINTMENT_CANCELLED'
@@ -28,6 +29,11 @@ export type NotifyPayload = {
   service_id: string;
   starts_at: string;
   ends_at: string;
+  // Data e hora pré-formatadas em America/Sao_Paulo (dd/mm/aaaa e HH:mm).
+  // Workflows n8n devem usar estes campos para evitar formatação local
+  // (cuja saída depende de process.env.TZ do runtime Node).
+  data: string;
+  hora: string;
   // Status atual do appointment (CONFIRMED / CANCELLED / ...). O workflow de
   // confirmação no n8n usa esse campo como guarda antes de mandar WhatsApp.
   status: string;
@@ -55,6 +61,8 @@ async function buildPayload(
     service_id: appt.service.id,
     starts_at: appt.startsAt.toISOString(),
     ends_at: appt.endsAt.toISOString(),
+    data: formatPtBrDate(appt.startsAt),
+    hora: formatPtBrTime(appt.startsAt),
     status: appt.status,
   };
 }

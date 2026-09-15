@@ -7,7 +7,7 @@ import { addHours } from 'date-fns';
 import { prisma } from '@/lib/db/prisma';
 import { env } from '@/lib/env';
 import { recordAudit } from '@/lib/audit/audit';
-import { midnightInSaoPaulo } from '@/lib/time/sao-paulo';
+import { formatPtBrDate, formatPtBrTime, midnightInSaoPaulo } from '@/lib/time/sao-paulo';
 
 export type ReminderItem = {
   confirmation_id: string;
@@ -18,6 +18,10 @@ export type ReminderItem = {
   service_id: string;
   starts_at: string;
   ends_at: string;
+  // Data e hora pré-formatadas em America/Sao_Paulo (dd/mm/aaaa e HH:mm).
+  // Workflow n8n deve usar estes campos para evitar formatação local.
+  data: string;
+  hora: string;
 };
 
 export type BatchResult = {
@@ -87,6 +91,8 @@ export async function runConfirmationRemindersBatch(now: Date = new Date()): Pro
       service_id: apt.serviceId,
       starts_at: apt.startsAt.toISOString(),
       ends_at: apt.endsAt.toISOString(),
+      data: formatPtBrDate(apt.startsAt),
+      hora: formatPtBrTime(apt.startsAt),
     });
   }
 

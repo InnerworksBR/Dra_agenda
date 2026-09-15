@@ -4,13 +4,10 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSession } from '@/lib/auth/session';
 import { apiError, apiOk } from '@/lib/api/response';
-import {
-  cancelAppointment,
-  confirmAppointment,
-  listAppointmentsForPatient,
-} from '@/lib/appointments/service';
+import { cancelAppointment, confirmAppointment, listAppointmentsForPatient } from '@/lib/appointments/service';
 import { UnauthorizedError } from '@/lib/errors';
 import { env } from '@/lib/env';
+import { healthPlanSchema } from '@/lib/patients/health-plans';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,7 +18,7 @@ const bodySchema = z.object({
   // Coletados inline na primeira tela do fluxo (opcional; se enviados, o
   // backend faz upsert antes de confirmar o slot).
   name: z.string().min(2).max(120).optional(),
-  health_plan: z.string().min(2).max(60).optional(),
+  health_plan: healthPlanSchema.optional(),
 });
 
 export async function GET(): Promise<NextResponse> {

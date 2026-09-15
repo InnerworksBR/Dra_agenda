@@ -4,7 +4,7 @@
 // superfícies full-bleed como separador visual, pill buttons, body 17px,
 // tracking negativo em display. Tudo em uma página só, scroll contínuo.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -40,7 +40,7 @@ export function SchedulingClient({
   serviceId,
 }: {
   patient: { id: string; name: string; healthPlan: string; phoneE164: string };
-  plans: { id: string; label: string }[];
+  plans: ReadonlyArray<{ id: string; label: string }>;
   serviceId: string;
 }) {
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(
@@ -60,6 +60,50 @@ export function SchedulingClient({
   // Identidade do paciente — começa preenchida se já vier do servidor.
   const [name, setName] = useState(patient.name);
   const [healthPlan, setHealthPlan] = useState(patient.healthPlan);
+
+  // Salva o nome no servidor assim que o input perde o foco, para não
+  // perder o dado se o paciente fechar a página antes de confirmar.
+  // Usa AbortController para cancelar requests anteriores em digitação rápida.
+  const saveNameAbortRef = useRef<AbortController | null>(null);
+  const saveHealthPlanAbortRef = useRef<AbortController | null>(null);
+  const savedNameRef = useRef<string>(patient.name);
+  const savedHealthPlanRef = useRef<string>(patient.healthPlan);
+
+  function patchIdentity(payload: { name?: string; health_plan?: string }): void {
+    const prev = payload.name !== undefined ? saveNameAbortRef : saveHealthPlanAbortRef;
+    prev.current?.abort();
+    const ctrl = new AbortController();
+    prev.current = ctrl;
+    fetch("/api/v1/patients/me/identity", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          if (payload.name !== undefined) savedNameRef.current = payload.name;
+          if (payload.health_plan !== undefined) savedHealthPlanRef.current = payload.health_plan;
+        }
+      })
+      .catch(() => {
+        // silencioso — o upsert no confirmAppointment é a rede de segurança
+      });
+  }
+
+  function handleNameBlur(): void {
+    const trimmed = name.trim();
+    if (trimmed.length < 2) return;
+    if (trimmed === savedNameRef.current) return;
+    patchIdentity({ name: trimmed });
+  }
+
+  function handleHealthPlanChange(next: string): void {
+    setHealthPlan(next);
+    if (next === savedHealthPlanRef.current) return;
+    if (next === "") return; // vazio não vale a pena persistir
+    patchIdentity({ health_plan: next });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -243,6 +287,7 @@ export function SchedulingClient({
                 className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onBlur={handleNameBlur}
                 autoComplete="name"
                 required
                 minLength={2}
@@ -259,7 +304,7 @@ export function SchedulingClient({
                 name="health_plan"
                 className="input"
                 value={healthPlan}
-                onChange={(e) => setHealthPlan(e.target.value)}
+                onChange={(e) => handleHealthPlanChange(e.target.value)}
                 required
               >
                 <option value="" disabled>

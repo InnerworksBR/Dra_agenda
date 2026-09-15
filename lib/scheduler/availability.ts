@@ -60,6 +60,23 @@ function dateFromDayKey(dayKey: string, tz: string): Date {
   return fromZonedTime(`${dayKey}T00:00:00`, tz);
 }
 
+/**
+ * Retorna o próximo dia, a partir de `from + 1 dia`, que tenha agenda
+ * configurada em `rules.weekdays[weekday]` (i.e., ranges não vazios).
+ * Safety interno: máximo 14 iterações para evitar loop infinito caso as
+ * regras estejam todas vazias.
+ */
+function nextBusinessDay(from: Date, tz: string, rules: SchedulingRules): Date {
+  let cursor = addDays(from, 1);
+  for (let i = 0; i < 14; i++) {
+    const weekday = weekdayKeyOf(cursor, tz);
+    const ranges = rules.weekdays[weekday] ?? [];
+    if (ranges.length > 0) return cursor;
+    cursor = addDays(cursor, 1);
+  }
+  return cursor; // fallback defensivo
+}
+
 export async function computeAvailability(opts: {
   now: Date;
   busy: BusyInterval[];
@@ -71,8 +88,12 @@ export async function computeAvailability(opts: {
   const now = opts.now;
 
   // Janela de busca: começa em "hoje" (no fuso) e vai até hoje + maxSearchDays.
+  // Regra de UX: o primeiro dia mostrado é ≥ D+2 dias úteis — chamamos
+  // `nextBusinessDay` duas vezes para pular hoje e o próximo dia útil.
   const startToday = startOfDay(toZonedTime(now, tz));
   const searchEnd = addDays(startToday, rules.maxSearchDays);
+  const d1 = nextBusinessDay(startToday, tz, rules);
+  const d2 = nextBusinessDay(d1, tz, rules);
 
   // Pré-organiza busy intervals por dia (chave local) para reduzir checks.
   const busyByDay = new Map<string, BusyInterval[]>();
@@ -84,7 +105,7 @@ export async function computeAvailability(opts: {
   }
 
   const days: DayAvailability[] = [];
-  let cursor = startToday;
+  let cursor = d2;
   let safety = 0;
   while (days.length < rules.windowDays && cursor < searchEnd) {
     if (++safety > rules.maxSearchDays + 2) break; // paranoia

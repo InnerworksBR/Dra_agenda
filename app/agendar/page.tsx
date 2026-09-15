@@ -5,9 +5,13 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { env } from "@/lib/env";
+import { HEALTH_PLANS, HEALTH_PLAN_IDS } from "@/lib/patients/health-plans";
+
 import { SchedulingClient } from "./scheduling-client";
 
 export const dynamic = "force-dynamic";
+
+const plans = HEALTH_PLANS;
 
 export default async function AgendarPage() {
   const session = await getSession();
@@ -24,17 +28,13 @@ export default async function AgendarPage() {
     redirect("/link-invalido?motivo=invalid");
   }
 
-  // Lista fixa de planos — em produção, vir do banco/config.
-  const plans = [
-    { id: "particular", label: "Particular" },
-    { id: "amil", label: "Amil" },
-    { id: "bradesco-saude", label: "Bradesco Saúde" },
-    { id: "sulamerica", label: "SulAmérica" },
-    { id: "unimed", label: "Unimed" },
-    { id: "hapvida", label: "Hapvida" },
-    { id: "notredame", label: "NotreDame Intermédica" },
-    { id: "outros", label: "Outro" },
-  ];
+  // Normaliza healthPlan: se o valor salvo no banco não está na nova lista
+  // (ex: paciente antigo com "particular", "amil"), força reescolha mostrando
+  // o select vazio. Backend rejeita valores fora da enum no próximo POST.
+  const normalizedHealthPlan =
+    patient.healthPlan && (HEALTH_PLAN_IDS as readonly string[]).includes(patient.healthPlan)
+      ? patient.healthPlan
+      : "";
 
   return (
     <main>
@@ -42,7 +42,7 @@ export default async function AgendarPage() {
         patient={{
           id: patient.id,
           name: patient.name ?? "",
-          healthPlan: patient.healthPlan ?? "",
+          healthPlan: normalizedHealthPlan,
           phoneE164: patient.phoneE164,
         }}
         plans={plans}

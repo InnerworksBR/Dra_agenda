@@ -7,6 +7,7 @@ import { getSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { apiError, apiOk } from '@/lib/api/response';
 import { env } from '@/lib/env';
+import { healthPlanSchema } from '@/lib/patients/health-plans';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({
   patient_id: z.string().min(1),
   name: z.string().min(2).max(120),
-  health_plan: z.string().min(2).max(60),
+  health_plan: healthPlanSchema.optional(),
   service_id: z.string().max(60).optional(),
 });
 

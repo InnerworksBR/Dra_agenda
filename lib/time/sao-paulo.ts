@@ -55,6 +55,32 @@ export function formatPtBr(
   return new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, ...options }).format(date);
 }
 
+/**
+ * Formata só a data (dd/mm/aaaa) no fuso America/Sao_Paulo.
+ * Usado em payloads para o n8n para que o workflow não precise formatar
+ * usando Intl.DateTimeFormat (cuja saída depende de `process.env.TZ`).
+ */
+export function formatPtBrDate(date: Date): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
+}
+
+/**
+ * Formata só a hora (HH:mm) no fuso America/Sao_Paulo.
+ */
+export function formatPtBrTime(date: Date): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
 /** Converte um telefone Evolution (ex.: 5513991743380@s.whatsapp.net) para E.164 cru. */
 export function normalizeEvolutionPhone(raw: string): string {
   // Evolution manda "5513991743380@s.whatsapp.net" ou já só dígitos.
