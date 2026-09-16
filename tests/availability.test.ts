@@ -186,6 +186,22 @@ describe('computeAvailability', () => {
       expect(result.windowDays.length).toBeGreaterThan(0);
       expect(result.windowDays[0]!.date).toBe('2026-01-12');
     });
+
+    it('D+2 respeita o fuso SP mesmo quando o servidor está em UTC', async () => {
+      // Bug conhecido: startOfDay da date-fns usa o fuso local do processo.
+      // Quando o servidor roda em UTC e now é quarta 16 14:18 UTC (=
+      // quarta 16 11:18 SP), sem a correção via fromZonedTime o D+2 virava
+      // D+1 e oferecia quinta 17 como primeiro dia.
+      const now = new Date('2026-09-16T14:18:00Z'); // qua 11:18 SP
+      const result = await computeAvailability({
+        now,
+        events: [
+          evOn('2026-09-18', '08:00', '12:00'), // sex 18 com evento
+        ],
+      });
+      expect(result.windowDays.length).toBeGreaterThan(0);
+      expect(result.windowDays[0]!.date).toBe('2026-09-18');
+    });
   });
 
   it('respeita a janela absoluta (não oferece antes do dayWindow.start nem depois do end)', async () => {

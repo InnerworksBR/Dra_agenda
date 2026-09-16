@@ -22,8 +22,8 @@
 // definido" — sem eventos o dia some da janela, refletindo o caso real
 // (Dra. não atende e a agenda está vazia).
 
-import { addDays, addMinutes, isAfter, isBefore, startOfDay } from 'date-fns';
-import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { addDays, addMinutes, isAfter, isBefore } from 'date-fns';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import type { BusyInterval } from '@/lib/calendar/provider';
 import { getSchedulingRules, type SchedulingRules } from '@/lib/scheduler/rules';
 
@@ -140,8 +140,12 @@ export async function computeAvailability(opts: {
   const rules = opts.rules ?? getSchedulingRules();
   const now = opts.now;
 
-  // Janela absoluta do dia no fuso da clínica (HH:mm -> minutos -> Date do dia).
-  const startToday = startOfDay(toZonedTime(now, tz));
+  // Meia-noite de hoje no fuso da clínica (Date em UTC). Construído via
+  // fromZonedTime para não depender do fuso local do processo — quando o
+  // servidor roda em UTC, startOfDay da date-fns zera 00:00 UTC, que em
+  // SP vira 21:00 do dia anterior, bagunçando o D+2.
+  const todayKey = dateKeyOf(now, tz);
+  const startToday = fromZonedTime(`${todayKey}T00:00:00`, tz);
   const dayStartMinutes = hhmmToMinutes(rules.dayWindow.start);
   const dayEndMinutes = hhmmToMinutes(rules.dayWindow.end);
 
