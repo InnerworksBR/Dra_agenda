@@ -8,8 +8,8 @@ import {
 } from '@/lib/patients/health-plans';
 
 describe('HEALTH_PLANS', () => {
-  it('tem 7 planos', () => {
-    expect(HEALTH_PLANS).toHaveLength(7);
+  it('tem 10 planos', () => {
+    expect(HEALTH_PLANS).toHaveLength(10);
   });
 
   it('IDs e labels estão em ordem alfabética pelo label pt-BR', () => {
@@ -36,14 +36,16 @@ describe('HEALTH_PLANS', () => {
 });
 
 describe('healthPlanSchema', () => {
-  it('aceita cada um dos 7 ids válidos', () => {
+  it('aceita cada um dos 10 ids válidos', () => {
     for (const id of HEALTH_PLAN_IDS) {
       expect(healthPlanSchema.safeParse(id).success).toBe(true);
     }
   });
 
-  it('rejeita valores legados (particular, amil, bradesco-saude, etc.)', () => {
-    const legados = ['particular', 'amil', 'bradesco-saude', 'sulamerica', 'unimed', 'hapvida', 'notredame', 'outros', 'Particular'];
+  it('rejeita valores legados que não estão mais na lista', () => {
+    // dentalpar, transmontano e previan saíram da lista nova —
+    // transmontano/dentalpar virou um item só; previan não faz mais parte.
+    const legados = ['dentalpar', 'transmontano', 'previan', 'hapvida', 'notredame', 'bradesco-saude', 'outros'];
     for (const id of legados) {
       expect(healthPlanSchema.safeParse(id).success).toBe(false);
     }
@@ -58,7 +60,8 @@ describe('healthPlanSchema', () => {
 describe('healthPlanLabel', () => {
   it('retorna o label bonito para id conhecido', () => {
     expect(healthPlanLabel('bb-dental')).toBe('BB Dental');
-    expect(healthPlanLabel('uniodonto')).toBe('Uniodonto');
+    expect(healthPlanLabel('particular')).toBe('Particular');
+    expect(healthPlanLabel('transmontano-dentalpar')).toBe('Transmontano/Dentalpar');
   });
 
   it('retorna string vazia para null/undefined', () => {
@@ -68,6 +71,6 @@ describe('healthPlanLabel', () => {
   });
 
   it('retorna o próprio id quando não está na lista (fallback)', () => {
-    expect(healthPlanLabel('particular')).toBe('particular');
+    expect(healthPlanLabel('bradesco-saude')).toBe('bradesco-saude');
   });
 });

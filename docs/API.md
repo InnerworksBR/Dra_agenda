@@ -339,7 +339,7 @@ Content-Type: application/json
 }
 ```
 
-`health_plan` aceita apenas os IDs da lista de planos odontológicos: `bb-dental`, `bradesco-dental`, `dentalpar`, `metlife`, `previan`, `transmontano`, `uniodonto`.
+`health_plan` aceita apenas os IDs da lista de planos odontológicos: `particular`, `odontoprev`, `bradesco-dental`, `bb-dental`, `unimed`, `uniodonto`, `sulamerica`, `amil`, `metlife`, `transmontano-dentalpar`.
 
 **Resposta (201):**
 ```json
@@ -377,7 +377,7 @@ Salva campos de identidade (nome e/ou plano) do paciente autenticado. É chamado
 }
 ```
 
-Pelo menos um dos campos deve estar presente. `health_plan` aceita apenas os IDs da lista de planos odontológicos: `bb-dental`, `bradesco-dental`, `dentalpar`, `metlife`, `previan`, `transmontano`, `uniodonto`.
+Pelo menos um dos campos deve estar presente. `health_plan` aceita apenas os IDs da lista de planos odontológicos: `particular`, `odontoprev`, `bradesco-dental`, `bb-dental`, `unimed`, `uniodonto`, `sulamerica`, `amil`, `metlife`, `transmontano-dentalpar`.
 
 **Resposta (200):**
 ```json
