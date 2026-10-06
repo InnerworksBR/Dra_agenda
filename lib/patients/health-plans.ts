@@ -11,6 +11,7 @@ export const HEALTH_PLAN_IDS = [
   'metlife',
   'odontoprev',
   'particular',
+  'santa-casa-saude',
   'sulamerica',
   'transmontano-dentalpar',
   'unimed',
@@ -29,6 +30,7 @@ const HEALTH_PLANS_RAW: Array<{ id: HealthPlanId; label: string }> = [
   { id: 'sulamerica', label: 'Sulamerica' },
   { id: 'amil', label: 'Amil' },
   { id: 'metlife', label: 'MetLife' },
+  { id: 'santa-casa-saude', label: 'Santa Casa Saúde' },
   { id: 'transmontano-dentalpar', label: 'Transmontano/Dentalpar' },
 ];
 
