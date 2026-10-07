@@ -64,6 +64,48 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_BASE_URL }}/api/v1/cron/confirm-reminders/{{ $json.confirmation_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_API_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-validate-reminder",
+      "name": "Backend — revalidar consulta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// A resposta do backend é atual; descarta consultas canceladas, respondidas ou iniciadas.\nreturn $input.all().filter((item) => item.json.send === true);"
+      },
+      "id": "code-filter-active-reminders",
+      "name": "Manter consultas ativas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "=https://{{ $env.EVOLUTION_API_HOST }}/message/sendText/{{ $env.EVOLUTION_INSTANCE }}",
         "sendHeaders": true,
@@ -95,7 +137,7 @@
       "name": "Evolution API — enviar WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 300]
+      "position": [1440, 300]
     }
   ],
   "connections": {
@@ -106,6 +148,12 @@
       "main": [[{ "node": "Expandir lembretes", "type": "main", "index": 0 }]]
     },
     "Expandir lembretes": {
+      "main": [[{ "node": "Backend — revalidar consulta", "type": "main", "index": 0 }]]
+    },
+    "Backend — revalidar consulta": {
+      "main": [[{ "node": "Manter consultas ativas", "type": "main", "index": 0 }]]
+    },
+    "Manter consultas ativas": {
       "main": [[{ "node": "Evolution API — enviar WhatsApp", "type": "main", "index": 0 }]]
     }
   },

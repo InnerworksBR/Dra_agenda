@@ -133,6 +133,7 @@ AppointmentConfirmation
 | POST   | `/magic-links`                | Bearer (n8n)      | Gera magic link para paciente          |
 | POST   | `/magic-links/[id]/revoke`    | Bearer (n8n)      | Revoga magic link existente            |
 | POST   | `/n8n/management-link`       | Bearer (n8n)      | Gera link para gestão (cancel/reschedule) |
+| GET    | `/health-plans`               | Bearer (n8n)      | Lista os planos aceitos pela clínica   |
 | GET    | `/availability`                | Sessão (cookie)   | Lista slots disponíveis                |
 | GET    | `/patients/me`                | Sessão (cookie)   | Retorna dados do paciente logado       |
 | POST   | `/patients/me`                | Sessão (cookie)   | Atualiza nome e plano do paciente      |
@@ -153,12 +154,45 @@ AppointmentConfirmation
 |--------|-------------------------------|-------------------|----------------------------------------|
 | POST   | `/cron/sync-calendar`         | Bearer (n8n)      | Sincroniza Google Calendar → banco (a cada 5min) |
 | POST   | `/cron/confirm-reminders`     | Bearer (n8n)      | Gera lembretes 20h para n8n           |
+| GET    | `/cron/confirm-reminders/[confirmationId]` | Bearer (n8n) | Revalida lembrete antes do envio       |
 | POST   | `/webhooks/evolution/inbound` | API Key (Evolution) | Recebe respostas de lembretes       |
 | POST   | `/appointments/[id]/respond-reminder` | Bearer (n8n) | Persiste resposta a lembrete         |
 
 ---
 
 ## Detalhamento das Rotas
+
+### `GET /api/v1/health-plans` — Listar Planos Atendidos
+
+**Autenticação:** `Authorization: Bearer <N8N_API_SECRET>`
+
+Retorna a lista usada pelo seletor de planos do site e pela validação dos
+agendamentos.
+
+**Resposta (200):**
+```json
+{
+  "success": true,
+  "health_plans": [
+    { "id": "amil", "label": "Amil" },
+    { "id": "bb-dental", "label": "BB Dental" },
+    { "id": "bradesco-dental", "label": "Bradesco Dental" },
+    { "id": "metlife", "label": "MetLife" },
+    { "id": "odontoprev", "label": "Odontoprev" },
+    { "id": "particular", "label": "Particular" },
+    { "id": "santa-casa-saude", "label": "Santa Casa Saúde" },
+    { "id": "sulamerica", "label": "Sulamerica" },
+    { "id": "transmontano-dentalpar", "label": "Transmontano/Dentalpar" },
+    { "id": "unimed", "label": "Unimed" },
+    { "id": "uniodonto", "label": "Uniodonto" }
+  ]
+}
+```
+
+No n8n, configure um `HTTP Request Tool` chamado `consultar_planos_atendidos`,
+com método `GET`, URL `{{ $env.APP_BASE_URL }}/api/v1/health-plans` e header
+`Authorization: Bearer {{ $env.N8N_API_SECRET }}`. Não requer parâmetros nem
+corpo.
 
 ### `POST /api/v1/magic-links` — Criar Magic Link
 
@@ -493,6 +527,17 @@ Pelo menos um dos campos deve estar presente. `health_plan` aceita apenas os IDs
   }
 }
 ```
+
+---
+
+### `GET /api/v1/cron/confirm-reminders/[confirmationId]` — Revalidar Lembrete
+
+**Autenticação:** `Authorization: Bearer <N8N_API_SECRET>`
+
+O workflow n8n deve chamar esta rota para cada lembrete imediatamente antes do
+envio. `send: true` inclui os dados atuais do paciente; consultas canceladas,
+respondidas, iniciadas ou sem confirmação retornam `send: false` e não devem ser
+enviadas.
 
 ---
 

@@ -195,26 +195,26 @@ export async function cancelAppointment(input: CancelInput) {
 
   assertCancellable(existing.startsAt);
 
+  // O banco é a fonte da verdade. Persiste o cancelamento antes de chamar o
+  // Google para que outros fluxos (como o envio de lembretes) vejam o novo
+  // status sem esperar pela rede externa.
+  const cancelled = await prisma.appointment.update({
+    where: { id: existing.id },
+    data: { status: 'CANCELLED' },
+    include: { service: { select: { id: true, name: true } } },
+  });
+
   const provider = getCalendarProvider();
   let calendarFailed = false;
   if (existing.externalCalendarEventId) {
     try {
       await provider.deleteEvent(existing.externalCalendarEventId);
     } catch (e) {
-      if (e instanceof CalendarUnavailableError) {
-        calendarFailed = true;
-        // Não interrompemos — o banco é a fonte da verdade.
-      } else {
-        throw e;
-      }
+      calendarFailed = true;
+      // Não desfazemos o cancelamento local — o banco é a fonte da verdade.
+      console.error('[appointments] calendar delete failed during cancellation', e);
     }
   }
-
-  const cancelled = await prisma.appointment.update({
-    where: { id: existing.id },
-    data: { status: 'CANCELLED' },
-    include: { service: { select: { id: true, name: true } } },
-  });
 
   await recordAudit(prisma, {
     eventType: calendarFailed ? 'appointment.cancelled.calendar_failed' : 'appointment.cancelled',
