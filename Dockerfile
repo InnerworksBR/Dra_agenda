@@ -8,7 +8,15 @@
 
 ARG NODE_VERSION=20-bookworm-slim
 
-FROM node:${NODE_VERSION} AS deps
+FROM node:${NODE_VERSION} AS base
+# O Prisma detecta o engine nativo pela versão reportada pelo binário `openssl`.
+# Instale-o antes de `npm ci`/`prisma generate` para selecionar OpenSSL 3, igual
+# ao disponível em todas as etapas Debian Bookworm.
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS deps
 WORKDIR /app
 # Copia manifests e Prisma antes do npm ci para cachear a camada de deps
 # quando só o código fonte muda.
@@ -16,7 +24,7 @@ COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 RUN npm ci --include=dev
 
-FROM node:${NODE_VERSION} AS build
+FROM base AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -26,18 +34,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npx prisma generate && npm run build
 
-FROM node:${NODE_VERSION} AS run
+FROM base AS run
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-
-# Prisma engine exige libssl3; bookworm-slim não vem com openssl instalado.
-# Instalamos explicitamente e limpamos o cache do apt para manter a imagem enxuta.
-RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 
 # Usuário não-root. Debian-slim tem adduser com --disabled-password.
 RUN groupadd --system app && useradd --system --gid app app
